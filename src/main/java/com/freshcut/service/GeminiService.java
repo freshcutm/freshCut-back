@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Random;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -81,7 +82,10 @@ public class GeminiService {
         Map<String, Object> body = new HashMap<>();
         body.put("contents", contents);
         Map<String, Object> gen = new HashMap<>();
-        gen.put("temperature", 0.4);
+        // Mayor variación controlada para respuestas más diversas
+        gen.put("temperature", 0.75);
+        gen.put("topK", 40);
+        gen.put("topP", 0.9);
         gen.put("maxOutputTokens", 256);
         body.put("generationConfig", gen);
 
@@ -224,7 +228,10 @@ public class GeminiService {
         Map<String, Object> body = new HashMap<>();
         body.put("contents", List.of(content));
         Map<String, Object> gen = new HashMap<>();
-        gen.put("temperature", 0.4);
+        // Aumenta diversidad para que no repita siempre las mismas opciones
+        gen.put("temperature", 0.8);
+        gen.put("topK", 40);
+        gen.put("topP", 0.9);
         gen.put("maxOutputTokens", 256);
         body.put("generationConfig", gen);
 
@@ -284,50 +291,76 @@ public class GeminiService {
         String hair = extractSection(text, "pelo:");
         String tastes = extractSection(text, "gustos:");
 
+        Random rng = new Random();
         String option1;
         String option2;
 
         if (tastes.contains("mohicano")) {
-            option1 = "Mohicano suavizado con laterales muy cortos (Fade alto).";
-            option2 = "Crop texturizado si prefieres algo menos radical.";
+            String[] opt = {
+                "Mohicano suavizado con laterales muy cortos (Fade alto).",
+                "Mohicano moderno con transición media y textura en la cresta.",
+                "Faux hawk con Fade medio para un perfil menos radical."
+            };
+            option1 = opt[rng.nextInt(opt.length)];
+            option2 = rng.nextBoolean() ? "Crop texturizado si prefieres algo menos radical." : "Pompadour corto con laterales limpios como alternativa.";
         } else if (tastes.contains("mullet")) {
-            option1 = "Mullet moderno con Fade bajo y nuca marcada.";
-            option2 = "Corte clásico con volumen y textura para transición al mullet.";
+            String[] opt = {
+                "Mullet moderno con Fade bajo y nuca marcada.",
+                "Mullet suave con capas y transición media en laterales.",
+                "Mullet clásico con textura arriba y contornos definidos."
+            };
+            option1 = opt[rng.nextInt(opt.length)];
+            option2 = rng.nextBoolean() ? "Corte clásico con volumen y textura para transición al mullet." : "Crop largo con línea lateral para ir hacia mullet gradualmente.";
         } else if (face.contains("oval")) {
-            option1 = "Fade medio + textura arriba; favorece rostros ovalados.";
-            option2 = "Pompadour ligero si buscas más altura.";
+            String[] opt = {
+                "Fade medio + textura arriba; favorece rostros ovalados.",
+                "Side part con transición baja y volumen moderado.",
+                "Crop desordenado con leve elevación en el frontal."
+            };
+            option1 = opt[rng.nextInt(opt.length)];
+            option2 = rng.nextBoolean() ? "Pompadour ligero si buscas más altura." : "Peinado hacia atrás con fijación suave para pulir el perfil.";
         } else if (face.contains("redond") || face.contains("cachet")) {
-            option1 = "Corte clásico con volumen arriba y laterales bajos para estilizar.";
-            option2 = "Side part con Fade medio para definir pómulos.";
+            String[] opt = {
+                "Corte clásico con volumen arriba y laterales bajos para estilizar.",
+                "Quiff moderado con Fade medio para definir ángulos.",
+                "Crop texturizado alto, manteniendo laterales muy contenidos."
+            };
+            option1 = opt[rng.nextInt(opt.length)];
+            option2 = rng.nextBoolean() ? "Side part con Fade medio para definir pómulos." : "Peinado hacia atrás con raya discreta para afinar el contorno.";
         } else {
-            option1 = "Crop texturizado con Fade bajo, versátil para la mayoría.";
-            option2 = "Clásico peinado hacia atrás con laterales limpios.";
+            String[] opt = {
+                "Crop texturizado con Fade bajo, versátil para la mayoría.",
+                "Fade medio con peine hacia atrás y acabado mate.",
+                "Crew cut moderno con transición limpia y definición frontal."
+            };
+            option1 = opt[rng.nextInt(opt.length)];
+            option2 = rng.nextBoolean() ? "Clásico peinado hacia atrás con laterales limpios." : "Side part suave con volumen natural arriba.";
         }
 
         String maintenance;
         if (hair.contains("grueso") || hair.contains("abundante")) {
-            maintenance = "Mantenimiento: cera mate o polvo de volumen, repaso cada 3–4 semanas.";
+            maintenance = rng.nextBoolean() ? "Mantenimiento: cera mate o polvo de volumen, repaso cada 3–4 semanas." : "Mantenimiento: crema moldeadora y control de volumen; repaso cada 3–4 semanas.";
         } else if (hair.contains("ondulado")) {
-            maintenance = "Mantenimiento: crema para ondas y difusor; repaso cada 4 semanas.";
+            maintenance = rng.nextBoolean() ? "Mantenimiento: crema para ondas y difusor; repaso cada 4 semanas." : "Mantenimiento: leave-in ligero y definición con manos; repaso cada 4 semanas.";
         } else if (hair.contains("liso")) {
-            maintenance = "Mantenimiento: pomada ligera para definición; repaso cada 4 semanas.";
+            maintenance = rng.nextBoolean() ? "Mantenimiento: pomada ligera para definición; repaso cada 4 semanas." : "Mantenimiento: cera flexible y volumen moderado; repaso cada 4 semanas.";
         } else {
-            maintenance = "Mantenimiento: producto ligero según textura; repaso cada 4 semanas.";
+            maintenance = rng.nextBoolean() ? "Mantenimiento: producto ligero según textura; repaso cada 4 semanas." : "Mantenimiento: acabado mate y retoques rápidos; repaso cada 4 semanas.";
         }
 
         String notRec;
         if (hair.contains("fino") || hair.contains("delicado")) {
-            notRec = "químicos agresivos y calor excesivo; productos pesados que apelmacen.";
+            notRec = rng.nextBoolean() ? "químicos agresivos y calor excesivo; productos pesados que apelmacen." : "decoloraciones fuertes y ceras pesadas que restan volumen.";
         } else if (face.contains("redond") || face.contains("cachet")) {
-            notRec = "volumen en laterales y fades muy altos; copetes que redondeen más.";
+            notRec = rng.nextBoolean() ? "volumen en laterales y fades muy altos; copetes que redondeen más." : "líneas en laterales demasiado altas; volumen lateral exagerado.";
         } else if (face.contains("oval")) {
-            notRec = "rapados extremos o copetes exagerados; químicos fuertes si cabello fino.";
+            notRec = rng.nextBoolean() ? "rapados extremos o copetes exagerados; químicos fuertes si cabello fino." : "volúmenes desproporcionados que alarguen demasiado; permanentes agresivas si cabello sensible.";
         } else if (hair.contains("grueso") || hair.contains("abundante")) {
-            notRec = "copetes rígidos muy altos; cortes sin textura que dificulten el peinado.";
+            notRec = rng.nextBoolean() ? "copetes rígidos muy altos; cortes sin textura que dificulten el peinado." : "acabados brillantes muy pesados; contornos sin textura que endurecen.";
         } else if (hair.contains("ondulado")) {
-            notRec = "coronilla demasiado corta; productos muy rígidos que frizzan.";
+            notRec = rng.nextBoolean() ? "coronilla demasiado corta; productos muy rígidos que frizzan." : "planos excesivos en el frontal; geles duros que generan frizz.";
         } else {
-            notRec = "cortes demasiado altos si frente amplia; procedimientos químicos agresivos si cabello sensible.";
+            notRec = rng.nextBoolean() ? "cortes demasiado altos si frente amplia; procedimientos químicos agresivos si cabello sensible." : "transiciones muy marcadas si rostro estrecho; tratamientos agresivos innecesarios.";
         }
 
         String reply = String.join("\n",
