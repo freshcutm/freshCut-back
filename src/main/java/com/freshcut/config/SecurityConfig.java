@@ -35,6 +35,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/ai/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/profile/avatar/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/barbers", "/api/services").permitAll()
                 .requestMatchers("/api/barber/**").hasRole("BARBER")
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")

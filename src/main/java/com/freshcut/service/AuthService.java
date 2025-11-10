@@ -71,11 +71,33 @@ u.setName(req.getName());
     public AuthResponse login(LoginRequest req) {
         User u = userRepository.findByEmail(req.getEmail())
                 .orElseThrow(() -> new IllegalArgumentException("Credenciales inválidas"));
-        if (!passwordEncoder.matches(req.getPassword(), u.getPasswordHash())) {
+
+        boolean ok = passwordEncoder.matches(req.getPassword(), u.getPasswordHash());
+        if (!ok) {
+            // Compatibilidad con cuentas creadas cuando el frontend enviaba SHA-256
+            String legacy = sha256(req.getPassword());
+            ok = passwordEncoder.matches(legacy, u.getPasswordHash());
+        }
+        if (!ok) {
             throw new IllegalArgumentException("Credenciales inválidas");
         }
+
         String token = jwtService.generate(u.getEmail(), Map.of("role", u.getRole().name()));
         return new AuthResponse(token, u.getEmail(), u.getRole().name());
+    }
+
+    private String sha256(String text) {
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] digest = md.digest(text.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder(digest.length * 2);
+            for (byte b : digest) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            return text; // fallback (no debería ocurrir)
+        }
     }
 
     // Solicitar recuperación: genera código de 6 dígitos y lo guarda con expiración
