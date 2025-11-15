@@ -9,6 +9,9 @@ import java.util.Optional;
 import java.util.Random;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.awt.image.BufferedImage;
+import javax.imageio.ImageIO;
+import java.io.ByteArrayInputStream;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
@@ -31,6 +34,7 @@ public class GeminiService {
     private final RestTemplate restTemplate;
     private static final String MODEL = "gemini-1.5-flash-latest";
     private static final String IMAGE_MODEL = "gemini-2.5-flash-image";
+    private static final String STANDARD_REPLY = "Puedo ayudarte solo con recomendaciones de cortes, estilos, barba o facciones. ¿Quieres describir tu rostro o subir una foto?";
 
     public GeminiService(@Value("${gemini.api-key:}") String apiKeyProp) {
         String envKey = System.getenv("GEMINI_API_KEY");
@@ -43,8 +47,18 @@ public class GeminiService {
     }
 
     public ChatResponse chat(ChatRequest req) {
+        StringBuilder all = new StringBuilder();
+        if (req.getFaceDescription() != null) all.append(req.getFaceDescription()).append(" ");
+        if (req.getMessages() != null) {
+            for (Message m : req.getMessages()) {
+                if (m.getContent() != null) all.append(m.getContent()).append(" ");
+            }
+        }
+        if (!isRelevantText(all.toString())) {
+            return new ChatResponse(STANDARD_REPLY);
+        }
         if (apiKey == null || apiKey.isBlank()) {
-            return ruleBasedReply(req);
+            return new ChatResponse(STANDARD_REPLY);
         }
 
         String url = String.format(
@@ -53,10 +67,10 @@ public class GeminiService {
 
         List<Map<String, Object>> contents = new ArrayList<>();
 
-        String systemPrompt = "Eres un barbero experto. Recomienda estilos de corte y barba basados en rostro, cabello y gustos. "
-                + "Responde en español, muy breve (máximo 4 líneas) y directo, con 1-2 opciones y mantenimiento. "
-                + "Si aplica, sugiere un servicio del catálogo (Corte clásico, Fade, Barba). "
-                + "Si faltan datos, pide 1 aclaración. Evita información médica.";
+        String systemPrompt = "Eres un asistente especializado exclusivamente en recomendaciones de cortes de cabello basadas en rostro, barba, estilo y facciones. "
+                + "Si el usuario pregunta algo fuera de este contexto, debes responder con: '" + STANDARD_REPLY + "'. "
+                + "Nunca respondas con recomendaciones si no hay información válida. "
+                + "Responde en español, muy breve (máximo 4 líneas), con 1-2 opciones y mantenimiento.";
 
         contents.add(Map.of(
             "role", "user",
@@ -109,10 +123,9 @@ public class GeminiService {
             Object text = parts.get(0).get("text");
             return new ChatResponse(text == null ? "" : text.toString());
         } catch (HttpClientErrorException e) {
-            String msg = e.getResponseBodyAsString();
-            return new ChatResponse("Error de IA: " + (msg != null ? msg : e.getStatusText()));
+            return new ChatResponse(STANDARD_REPLY);
         } catch (RestClientException e) {
-            return new ChatResponse("Error de IA: " + e.getMessage());
+            return new ChatResponse(STANDARD_REPLY);
         }
     }
 
@@ -194,17 +207,12 @@ public class GeminiService {
     }
 
     public ChatResponse recommendFromPhoto(byte[] imageBytes, String contentType, String faceDescription) {
+        if (!(isRelevantText(faceDescription) || isLikelyFacePhoto(imageBytes, contentType))) {
+            return new ChatResponse(STANDARD_REPLY);
+        }
         // Fallback sin clave: usa respuesta basada en reglas con la descripción
         if (apiKey == null || apiKey.isBlank()) {
-            ChatRequest req = new ChatRequest();
-            List<Message> msgs = new ArrayList<>();
-            Message m = new Message();
-            m.setRole("user");
-            m.setContent("gustos: profesional discreto\npelo: n/a");
-            msgs.add(m);
-            req.setMessages(msgs);
-            req.setFaceDescription(faceDescription);
-            return ruleBasedReply(req);
+            return new ChatResponse(STANDARD_REPLY);
         }
 
         String url = String.format(
@@ -260,16 +268,18 @@ public class GeminiService {
             }
             return new ChatResponse("No se obtuvo texto de recomendaciones.");
         } catch (HttpClientErrorException e) {
-            String msg = e.getResponseBodyAsString();
-            return new ChatResponse("Error de IA: " + (msg != null ? msg : e.getStatusText()));
+            return new ChatResponse(STANDARD_REPLY);
         } catch (RestClientException e) {
-            return new ChatResponse("Error de IA: " + e.getMessage());
+            return new ChatResponse(STANDARD_REPLY);
         }
     }
 
     private String buildPhotoAnalysisPrompt(String faceDescription) {
         StringBuilder sb = new StringBuilder();
-        sb.append("Eres un barbero experto. Analiza la foto del cliente y sugiere 2 cortes que le favorezcan según forma de rostro, frente, densidad y textura del cabello, y estilo personal. ");
+        sb.append("Eres un asistente especializado exclusivamente en recomendaciones de cortes de cabello basadas en rostro, barba, estilo y facciones. ");
+        sb.append("Si el usuario pregunta algo fuera de este contexto, debes responder con: '").append(STANDARD_REPLY).append("'. ");
+        sb.append("Nunca respondas con recomendaciones si no hay información válida o si no se detecta rostro. ");
+        sb.append("Analiza la foto del cliente y sugiere 2 cortes que le favorezcan según forma de rostro, frente, densidad y textura del cabello, y estilo personal. ");
         sb.append("Responde en español, breve (4–6 líneas), con nombres de cortes claros y 1–2 consejos de mantenimiento y productos. ");
         sb.append("Si aplica, sugiere un servicio del catálogo (Fade, Corte clásico, Barba). ");
         sb.append("Evita cualquier información médica. ");
@@ -278,6 +288,62 @@ public class GeminiService {
             sb.append("Notas del usuario: ").append(faceDescription).append(". ");
         }
         return sb.toString();
+    }
+
+    public boolean isRelevantText(String text) {
+        String t = Optional.ofNullable(text).orElse("").toLowerCase().trim();
+        if (t.isEmpty()) return false;
+        String[] domain = {
+            "corte","barba","estilo","estetica","estética","facciones","cara","rostro",
+            "cabello","pelo","textura","tipo de cabello","barberia","barbería","degradado","fade",
+            "pompadour","quiff","mullet","crop","crew","side part","linea","raya"
+        };
+        String[] off = {"clima","chiste","comida","politica","política","videojuego","programacion","programación","tarea","deberes","auto","mustang","coche","finanzas","medicina"};
+        int score = 0;
+        for (String k : domain) if (t.contains(k)) score++;
+        for (String k : off) if (t.contains(k)) score -= 2;
+        if (score <= 0) return false;
+        // Señales de intención
+        String[] intents = {"recomienda","sugerencia","me queda","me favorece","barbero","quiero","busco","cambiar","corte"};
+        boolean intent = false; for (String s : intents) { if (t.contains(s)) { intent = true; break; } }
+        return score >= 1 && intent;
+    }
+
+    public boolean isLikelyFacePhoto(byte[] imageBytes, String contentType) {
+        try {
+            if (imageBytes == null || imageBytes.length < 10240) return false; // muy pequeña
+            BufferedImage img = ImageIO.read(new ByteArrayInputStream(imageBytes));
+            if (img == null) return false;
+            int w = img.getWidth();
+            int h = img.getHeight();
+            if (w < 128 || h < 128) return false;
+            // Muestreo simple de piel en zona central
+            int cx0 = Math.max(0, w/2 - w/6);
+            int cy0 = Math.max(0, h/2 - h/6);
+            int cx1 = Math.min(w-1, w/2 + w/6);
+            int cy1 = Math.min(h-1, h/2 + h/6);
+            int samples = 0;
+            int skin = 0;
+            for (int y = cy0; y <= cy1; y += Math.max(1,(cy1-cy0)/20)) {
+                for (int x = cx0; x <= cx1; x += Math.max(1,(cx1-cx0)/20)) {
+                    int rgb = img.getRGB(x, y);
+                    int r = (rgb >> 16) & 0xFF;
+                    int g = (rgb >> 8) & 0xFF;
+                    int b = rgb & 0xFF;
+                    // Conversión aproximada a YCbCr
+                    double Y = 0.299*r + 0.587*g + 0.114*b;
+                    double Cb = -0.168736*r - 0.331264*g + 0.5*b + 128;
+                    double Cr = 0.5*r - 0.418688*g - 0.081312*b + 128;
+                    boolean isSkin = (Cb >= 77 && Cb <= 127) && (Cr >= 133 && Cr <= 173) && (Y > 40 && Y < 230);
+                    samples++;
+                    if (isSkin) skin++;
+                }
+            }
+            double ratio = samples > 0 ? (double)skin / samples : 0.0;
+            return ratio >= 0.03; // umbral bajo: presencia mínima de piel en zona central
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private ChatResponse ruleBasedReply(ChatRequest req) {

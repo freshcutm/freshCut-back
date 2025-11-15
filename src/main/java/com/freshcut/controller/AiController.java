@@ -47,8 +47,6 @@ public class AiController {
     public ResponseEntity<ChatResponse> chat(
             @Valid @RequestBody ChatRequest req,
             @RequestHeader(name = "Authorization", required = false) String authorization) {
-        ChatResponse res = geminiService.chat(req);
-
         String email = null;
         if (authorization != null && authorization.startsWith("Bearer ")) {
             try {
@@ -57,6 +55,20 @@ public class AiController {
             } catch (Exception ignored) {}
         }
 
+        StringBuilder all = new StringBuilder();
+        if (req.getFaceDescription() != null) all.append(req.getFaceDescription()).append(" ");
+        if (req.getMessages() != null) {
+            for (Message m : req.getMessages()) {
+                if (m.getContent() != null) all.append(m.getContent()).append(" ");
+            }
+        }
+        boolean relevant = geminiService.isRelevantText(all.toString());
+        ChatResponse res;
+        if (!relevant) {
+            res = new ChatResponse("Puedo ayudarte solo con recomendaciones de cortes, estilos, barba o facciones. ¿Quieres describir tu rostro o subir una foto?");
+        } else {
+            res = geminiService.chat(req);
+        }
         ChatLog log = new ChatLog();
         log.setEmail(email);
         log.setFaceDescription(req.getFaceDescription());
@@ -71,6 +83,9 @@ public class AiController {
         }
         log.setMessages(msgs);
         log.setReply(res.getReply());
+        if (!relevant) {
+            log.setRejectReason("irrelevant_text");
+        }
         chatLogRepository.save(log);
 
         return ResponseEntity.ok(res);
@@ -103,11 +118,13 @@ public class AiController {
             @RequestParam(name = "faceDescription", required = false) String faceDescription,
             @RequestHeader(name = "Authorization", required = false) String authorization) {
         try {
-            if (!isRelevant(faceDescription)) {
-                return ResponseEntity.ok(new ChatResponse("Puedo ayudarte solo con recomendaciones de cortes, estilos, barba o facciones. ¿Quieres describir tu rostro o subir una foto?"));
-            }
             byte[] image = file.getBytes();
-            ChatResponse res = geminiService.recommendFromPhoto(image, file.getContentType(), faceDescription);
+            boolean textOk = geminiService.isRelevantText(faceDescription);
+            boolean faceOk = geminiService.isLikelyFacePhoto(image, file.getContentType());
+            boolean relevant = faceOk || textOk;
+            ChatResponse res = relevant
+                ? geminiService.recommendFromPhoto(image, file.getContentType(), faceDescription)
+                : new ChatResponse("Puedo ayudarte solo con recomendaciones de cortes, estilos, barba o facciones. ¿Quieres describir tu rostro o subir una foto?");
 
             String email = null;
             if (authorization != null && authorization.startsWith("Bearer ")) {
@@ -122,20 +139,14 @@ public class AiController {
             log.setFaceDescription(faceDescription);
             log.setMessages(new ArrayList<>());
             log.setReply(res.getReply());
+            if (!relevant) {
+                log.setRejectReason(faceOk ? "irrelevant_text" : "no_face_detected");
+            }
             chatLogRepository.save(log);
 
             return ResponseEntity.ok(res);
         } catch (IOException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ChatResponse("No se pudo procesar la foto."));
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ChatResponse("Puedo ayudarte solo con recomendaciones de cortes, estilos, barba o facciones. ¿Quieres describir tu rostro o subir una foto?"));
         }
-    }
-
-    private boolean isRelevant(String text) {
-        if (text == null) return false;
-        String t = text.toLowerCase();
-        if (t.trim().isEmpty()) return false;
-        String[] kw = new String[] { "corte", "barba", "estilo", "estética", "facciones", "cara", "rostro", "cabello", "pelo", "textura", "tipo de cabello", "barbería", "barbero" };
-        for (String k : kw) { if (t.contains(k)) return true; }
-        return false;
     }
 }
