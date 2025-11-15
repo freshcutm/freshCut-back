@@ -37,6 +37,6 @@ public class AdminBarberController {
     public ResponseEntity<Void> delete(@PathVariable String id) {
         if (!repo.existsById(id)) return ResponseEntity.notFound().build();
         repo.deleteById(id);
-        return ResponseEntity.noContent().buil();
+        return ResponseEntity.noContent().build();
     }
 }
