@@ -97,12 +97,15 @@ public class AiController {
         }
     }
 
-    @PostMapping(value = "/recommend-from-photo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+@PostMapping(value = "/recommend-from-photo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ChatResponse> recommendFromPhoto(
             @RequestParam("file") MultipartFile file,
             @RequestParam(name = "faceDescription", required = false) String faceDescription,
             @RequestHeader(name = "Authorization", required = false) String authorization) {
         try {
+            if (!isRelevant(faceDescription)) {
+                return ResponseEntity.ok(new ChatResponse("Puedo ayudarte solo con recomendaciones de cortes, estilos, barba o facciones. ¿Quieres describir tu rostro o subir una foto?"));
+            }
             byte[] image = file.getBytes();
             ChatResponse res = geminiService.recommendFromPhoto(image, file.getContentType(), faceDescription);
 
@@ -125,5 +128,14 @@ public class AiController {
         } catch (IOException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ChatResponse("No se pudo procesar la foto."));
         }
+    }
+
+    private boolean isRelevant(String text) {
+        if (text == null) return false;
+        String t = text.toLowerCase();
+        if (t.trim().isEmpty()) return false;
+        String[] kw = new String[] { "corte", "barba", "estilo", "estética", "facciones", "cara", "rostro", "cabello", "pelo", "textura", "tipo de cabello", "barbería", "barbero" };
+        for (String k : kw) { if (t.contains(k)) return true; }
+        return false;
     }
 }
