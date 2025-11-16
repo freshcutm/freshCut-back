@@ -58,7 +58,7 @@ public class GeminiService {
             return new ChatResponse(STANDARD_REPLY);
         }
         if (apiKey == null || apiKey.isBlank()) {
-            return new ChatResponse(STANDARD_REPLY);
+            return ruleBasedReply(req);
         }
 
         String url = String.format(
@@ -70,7 +70,7 @@ public class GeminiService {
         String systemPrompt = "Eres un asistente especializado exclusivamente en recomendaciones de cortes de cabello basadas en rostro, barba, estilo y facciones. "
                 + "Si el usuario pregunta algo fuera de este contexto, debes responder con: '" + STANDARD_REPLY + "'. "
                 + "Nunca respondas con recomendaciones si no hay información válida. "
-                + "Responde en español, muy breve (máximo 4 líneas), con 1-2 opciones y mantenimiento.";
+                + "Responde en español, muy breve (máximo 4 líneas), con 1-3 opciones y mantenimiento.";
 
         contents.add(Map.of(
             "role", "user",
@@ -207,12 +207,22 @@ public class GeminiService {
     }
 
     public ChatResponse recommendFromPhoto(byte[] imageBytes, String contentType, String faceDescription) {
-        if (!(isRelevantText(faceDescription) || isLikelyFacePhoto(imageBytes, contentType))) {
+        boolean faceOk = isLikelyFacePhoto(imageBytes, contentType);
+        boolean textOk = isRelevantText(faceDescription);
+        if (!(textOk || faceOk)) {
             return new ChatResponse(STANDARD_REPLY);
         }
         // Fallback sin clave: usa respuesta basada en reglas con la descripción
         if (apiKey == null || apiKey.isBlank()) {
-            return new ChatResponse(STANDARD_REPLY);
+            ChatRequest req = new ChatRequest();
+            List<Message> msgs = new ArrayList<>();
+            Message m = new Message();
+            m.setRole("user");
+            m.setContent("gustos: profesional discreto\npelo: n/a");
+            msgs.add(m);
+            req.setMessages(msgs);
+            req.setFaceDescription(textOk ? faceDescription : "");
+            return ruleBasedReply(req);
         }
 
         String url = String.format(
@@ -344,7 +354,7 @@ public class GeminiService {
                 }
             }
             double ratio = samples > 0 ? (double)skin / samples : 0.0;
-            return ratio >= 0.008; // umbral más permisivo: presencia mínima de piel
+            return ratio >= 0.004; // umbral aún más permisivo: selfies con iluminación variable
         } catch (Exception e) {
             return false;
         }
