@@ -46,6 +46,9 @@ public class BookingService {
 
         LocalDateTime startDateTime = req.getStartTime();
         LocalDateTime computedEnd = startDateTime.plusMinutes(service.getDurationMinutes());
+        if (startDateTime.isBefore(LocalDateTime.now())) {
+            throw new IllegalArgumentException("No se puede reservar en una fecha pasada");
+        }
 
         // Overlap check (by barber name as stored in Booking)
         List<Booking> conflicts = bookingRepository.findOverlapping(req.getBarber(), computedEnd, startDateTime);
@@ -91,6 +94,9 @@ public class BookingService {
 
         LocalDateTime startDateTime = req.getStartTime();
         LocalDateTime computedEnd = startDateTime.plusMinutes(service.getDurationMinutes());
+        if (startDateTime.isBefore(LocalDateTime.now())) {
+            throw new IllegalArgumentException("No se puede reservar en una fecha pasada");
+        }
 
         // Overlap check excluding current booking
         List<Booking> conflicts = bookingRepository.findOverlapping(req.getBarber(), computedEnd, startDateTime);
