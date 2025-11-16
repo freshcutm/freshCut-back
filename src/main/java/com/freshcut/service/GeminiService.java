@@ -70,7 +70,8 @@ public class GeminiService {
         String systemPrompt = "Eres un asistente especializado exclusivamente en recomendaciones de cortes de cabello basadas en rostro, barba, estilo y facciones. "
                 + "Si el usuario pregunta algo fuera de este contexto, debes responder con: '" + STANDARD_REPLY + "'. "
                 + "Nunca respondas con recomendaciones si no hay información válida. "
-                + "Responde en español, muy breve (máximo 4 líneas), con 1-3 opciones y mantenimiento.";
+                + "Responde en español, muy breve (máximo 4 líneas), con 1-3 opciones y mantenimiento."
+                + "Si la foto que se tomó el usuario no corresponde a un rostro, debes responder con: 'No se puede procesar la foto. Por favor, sube una foto de tu rostro.'";
 
         contents.add(Map.of(
             "role", "user",
