@@ -41,13 +41,16 @@ public class AuthService {
         if (userRepository.existsByEmail(req.getEmail())) {
             throw new IllegalArgumentException("El email ya está registrado");
         }
+        if (!isStrongPassword(req.getPassword())) {
+            throw new IllegalArgumentException("Contraseña inválida: mínimo 8 caracteres, incluir mayúscula, minúscula, número y carácter especial");
+        }
         Role role = "ADMIN".equalsIgnoreCase(req.getRole()) ? Role.ADMIN :
                 ("BARBER".equalsIgnoreCase(req.getRole()) ? Role.BARBER : Role.USER);
         User u = new User();
-u.setEmail(req.getEmail());
-u.setPasswordHash(passwordEncoder.encode(req.getPassword()));
-u.setRole(role);
-u.setName(req.getName());
+        u.setEmail(req.getEmail());
+        u.setPasswordHash(passwordEncoder.encode(req.getPassword()));
+        u.setRole(role);
+        u.setName(req.getName());
         if (role == Role.BARBER) {
             // Si viene barberId se asocia, si no, se crea un perfil nuevo de barbero con el nombre proporcionado
             if (req.getBarberId() != null && !req.getBarberId().isBlank()) {
@@ -126,9 +129,17 @@ u.setName(req.getName());
         if (!req.getCode().equals(u.getResetCode())) {
             throw new IllegalArgumentException("Código inválido");
         }
+        if (!isStrongPassword(req.getNewPassword())) {
+            throw new IllegalArgumentException("Contraseña inválida: mínimo 8 caracteres, incluir mayúscula, minúscula, número y carácter especial");
+        }
         u.setPasswordHash(passwordEncoder.encode(req.getNewPassword()));
         u.setResetCode(null);
         u.setResetExpiry(null);
         userRepository.save(u);
+    }
+
+    private boolean isStrongPassword(String pw) {
+        if (pw == null) return false;
+        return pw.matches("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).{8,}$");
     }
 }
