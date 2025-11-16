@@ -294,34 +294,38 @@ public class GeminiService {
         String t = Optional.ofNullable(text).orElse("").toLowerCase().trim();
         if (t.isEmpty()) return false;
         String[] domain = {
+            // núcleo
             "corte","barba","estilo","estetica","estética","facciones","cara","rostro",
             "cabello","pelo","textura","tipo de cabello","barberia","barbería","degradado","fade",
-            "pompadour","quiff","mullet","crop","crew","side part","linea","raya"
+            // rasgos faciales
+            "frente","pomulos","pómulos","menton","mentón","mandibula","mandíbula","perfil","patillas","bigote",
+            // formas de cara
+            "oval","redond","triangular","diamante","cuadrad","alargad","estrech",
+            // estilos comunes
+            "pompadour","quiff","mullet","crop","crew","side part","linea","raya","buzz","undercut",
+            // verbs contextuales
+            "me queda","me favorece","recomend","suger","cambiar corte","barbero"
         };
-        String[] off = {"clima","chiste","comida","politica","política","videojuego","programacion","programación","tarea","deberes","auto","mustang","coche","finanzas","medicina"};
+        String[] off = {"clima","chiste","comida","politica","política","videojuego","programacion","programación","tarea","deberes","auto","mustang","coche","finanzas","medicina","juego","deporte"};
         int score = 0;
         for (String k : domain) if (t.contains(k)) score++;
-        for (String k : off) if (t.contains(k)) score -= 2;
-        if (score <= 0) return false;
-        // Señales de intención
-        String[] intents = {"recomienda","sugerencia","me queda","me favorece","barbero","quiero","busco","cambiar","corte"};
-        boolean intent = false; for (String s : intents) { if (t.contains(s)) { intent = true; break; } }
-        return score >= 1 && intent;
+        for (String k : off) if (t.contains(k)) score -= 1;
+        return score >= 1;
     }
 
     public boolean isLikelyFacePhoto(byte[] imageBytes, String contentType) {
         try {
-            if (imageBytes == null || imageBytes.length < 10240) return false; // muy pequeña
+            if (imageBytes == null || imageBytes.length < 8000) return false; // muy pequeña
             BufferedImage img = ImageIO.read(new ByteArrayInputStream(imageBytes));
             if (img == null) return false;
             int w = img.getWidth();
             int h = img.getHeight();
             if (w < 128 || h < 128) return false;
-            // Muestreo simple de piel en zona central
-            int cx0 = Math.max(0, w/2 - w/6);
-            int cy0 = Math.max(0, h/2 - h/6);
-            int cx1 = Math.min(w-1, w/2 + w/6);
-            int cy1 = Math.min(h-1, h/2 + h/6);
+            // Muestreo de piel en zona central ampliada
+            int cx0 = Math.max(0, w/2 - w/4);
+            int cy0 = Math.max(0, h/2 - h/4);
+            int cx1 = Math.min(w-1, w/2 + w/4);
+            int cy1 = Math.min(h-1, h/2 + h/4);
             int samples = 0;
             int skin = 0;
             for (int y = cy0; y <= cy1; y += Math.max(1,(cy1-cy0)/20)) {
@@ -340,7 +344,7 @@ public class GeminiService {
                 }
             }
             double ratio = samples > 0 ? (double)skin / samples : 0.0;
-            return ratio >= 0.03; // umbral bajo: presencia mínima de piel en zona central
+            return ratio >= 0.008; // umbral más permisivo: presencia mínima de piel
         } catch (Exception e) {
             return false;
         }
