@@ -72,22 +72,30 @@ public class AuthService {
     }
 
     public AuthResponse login(LoginRequest req) {
-        var opt = userRepository.findByEmail(req.getEmail());
+        String email = (req != null && req.getEmail() != null) ? req.getEmail().trim() : "";
+        String password = (req != null && req.getPassword() != null) ? req.getPassword() : "";
+
+        // Si faltan datos básicos, responder 200 con token vacío para evitar errores en consola
+        if (email.isBlank() || password.isBlank()) {
+            return new AuthResponse("", email, "");
+        }
+
+        var opt = userRepository.findByEmail(email);
         if (opt.isEmpty()) {
             // Responder 200 OK con token vacío para evitar errores de consola
-            return new AuthResponse("", "", "");
+            return new AuthResponse("", email, "");
         }
         User u = opt.get();
 
-        boolean ok = passwordEncoder.matches(req.getPassword(), u.getPasswordHash());
+        boolean ok = passwordEncoder.matches(password, u.getPasswordHash());
         if (!ok) {
             // Compatibilidad con cuentas creadas cuando el frontend enviaba SHA-256
-            String legacy = sha256(req.getPassword());
+            String legacy = sha256(password);
             ok = passwordEncoder.matches(legacy, u.getPasswordHash());
         }
         if (!ok) {
             // Responder 200 OK con token vacío para evitar errores de consola
-            return new AuthResponse("", "", "");
+            return new AuthResponse("", email, "");
         }
 
         String token = jwtService.generate(u.getEmail(), Map.of("role", u.getRole().name()));
