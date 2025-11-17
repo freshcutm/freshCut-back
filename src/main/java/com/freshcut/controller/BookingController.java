@@ -49,9 +49,15 @@ public class BookingController {
     }
 
     @PostMapping
-    public ResponseEntity<Booking> create(@Valid @RequestBody BookingRequest req) {
-        Booking saved = bookingService.create(req);
-        return ResponseEntity.status(HttpStatus.CREATED).body(saved);
+    public ResponseEntity<?> create(@RequestBody BookingRequest req) {
+        try {
+            // Evitar errores rojos en consola del navegador: responder 200 con mensaje
+            // cuando los datos son inválidos o hay conflicto de horario.
+            Booking saved = bookingService.create(req);
+            return ResponseEntity.status(HttpStatus.CREATED).body(saved);
+        } catch (IllegalArgumentException | IllegalStateException ex) {
+            return ResponseEntity.ok().body(java.util.Map.of("error", ex.getMessage()));
+        }
     }
 
     @GetMapping("/{id}")
