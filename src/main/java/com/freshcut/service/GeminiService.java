@@ -26,6 +26,12 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import com.freshcut.dto.ChatDtos.ChatRequest;
 import com.freshcut.dto.ChatDtos.ChatResponse;
 import com.freshcut.dto.ChatDtos.Message;
+import com.freshcut.service.strategy.FaceDetectionStrategy;
+import com.freshcut.service.strategy.DefaultFaceDetectionStrategy;
+import com.freshcut.service.strategy.TextRelevanceStrategy;
+import com.freshcut.service.strategy.DefaultTextRelevanceStrategy;
+import com.freshcut.service.factory.PromptFactory;
+import com.freshcut.service.factory.DefaultPromptFactory;
 
 @Service
 public class GeminiService {
@@ -35,6 +41,11 @@ public class GeminiService {
     private static final String MODEL = "gemini-1.5-flash-latest";
     private static final String IMAGE_MODEL = "gemini-2.5-flash-image";
     private static final String STANDARD_REPLY = "Puedo ayudarte solo con recomendaciones de cortes, estilos, barba o facciones. ¿Quieres describir tu rostro o subir una foto?";
+    // Estrategias (Patrón Strategy) para relevancia de texto y detección de rostro
+    private final TextRelevanceStrategy textStrategy = new DefaultTextRelevanceStrategy();
+    private final FaceDetectionStrategy faceStrategy = new DefaultFaceDetectionStrategy();
+    // Factory (Patrón Factory) para construir prompts
+    private final PromptFactory promptFactory = new DefaultPromptFactory();
 
     public GeminiService(@Value("${gemini.api-key:}") String apiKeyProp) {
         String envKey = System.getenv("GEMINI_API_KEY");
@@ -286,79 +297,15 @@ public class GeminiService {
     }
 
     private String buildPhotoAnalysisPrompt(String faceDescription) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("Eres un asistente especializado exclusivamente en recomendaciones de cortes de cabello basadas en rostro, barba, estilo y facciones. ");
-        sb.append("Si el usuario pregunta algo fuera de este contexto, debes responder con: '").append(STANDARD_REPLY).append("'. ");
-        sb.append("Nunca respondas con recomendaciones si no hay información válida o si no se detecta rostro. ");
-        sb.append("Analiza la foto del cliente y sugiere 2 cortes que le favorezcan según forma de rostro, frente, densidad y textura del cabello, y estilo personal. ");
-        sb.append("Responde en español, breve (4–6 líneas), con nombres de cortes claros y 1–2 consejos de mantenimiento y productos. ");
-        sb.append("Si aplica, sugiere un servicio del catálogo (Fade, Corte clásico, Barba). ");
-        sb.append("Evita cualquier información médica. ");
-        sb.append("Incluye al final una línea empezando con 'Evita:' que enumere 1–2 cortes o procedimientos que NO recomiendas para este caso (por ejemplo, fades muy altos si redondean más el rostro, químicos agresivos si el cabello es fino). ");
-        if (faceDescription != null && !faceDescription.isBlank()) {
-            sb.append("Notas del usuario: ").append(faceDescription).append(". ");
-        }
-        return sb.toString();
+        return promptFactory.buildPhotoAnalysisPrompt(STANDARD_REPLY, faceDescription);
     }
 
     public boolean isRelevantText(String text) {
-        String t = Optional.ofNullable(text).orElse("").toLowerCase().trim();
-        if (t.isEmpty()) return false;
-        String[] domain = {
-            // núcleo
-            "corte","barba","estilo","estetica","estética","facciones","cara","rostro",
-            "cabello","pelo","textura","tipo de cabello","barberia","barbería","degradado","fade",
-            // rasgos faciales
-            "frente","pomulos","pómulos","menton","mentón","mandibula","mandíbula","perfil","patillas","bigote",
-            // formas de cara
-            "oval","redond","triangular","diamante","cuadrad","alargad","estrech",
-            // estilos comunes
-            "pompadour","quiff","mullet","crop","crew","side part","linea","raya","buzz","undercut",
-            // verbs contextuales
-            "me queda","me favorece","recomend","suger","cambiar corte","barbero"
-        };
-        String[] off = {"clima","chiste","comida","politica","política","videojuego","programacion","programación","tarea","deberes","auto","mustang","coche","finanzas","medicina","juego","deporte"};
-        int score = 0;
-        for (String k : domain) if (t.contains(k)) score++;
-        for (String k : off) if (t.contains(k)) score -= 1;
-        return score >= 1;
+        return textStrategy.isRelevantText(text);
     }
 
     public boolean isLikelyFacePhoto(byte[] imageBytes, String contentType) {
-        try {
-            if (imageBytes == null || imageBytes.length < 8000) return false; // muy pequeña
-            BufferedImage img = ImageIO.read(new ByteArrayInputStream(imageBytes));
-            if (img == null) return false;
-            int w = img.getWidth();
-            int h = img.getHeight();
-            if (w < 128 || h < 128) return false;
-            // Muestreo de piel en zona central ampliada
-            int cx0 = Math.max(0, w/2 - w/4);
-            int cy0 = Math.max(0, h/2 - h/4);
-            int cx1 = Math.min(w-1, w/2 + w/4);
-            int cy1 = Math.min(h-1, h/2 + h/4);
-            int samples = 0;
-            int skin = 0;
-            for (int y = cy0; y <= cy1; y += Math.max(1,(cy1-cy0)/20)) {
-                for (int x = cx0; x <= cx1; x += Math.max(1,(cx1-cx0)/20)) {
-                    int rgb = img.getRGB(x, y);
-                    int r = (rgb >> 16) & 0xFF;
-                    int g = (rgb >> 8) & 0xFF;
-                    int b = rgb & 0xFF;
-                    // Conversión aproximada a YCbCr
-                    double Y = 0.299*r + 0.587*g + 0.114*b;
-                    double Cb = -0.168736*r - 0.331264*g + 0.5*b + 128;
-                    double Cr = 0.5*r - 0.418688*g - 0.081312*b + 128;
-                    boolean isSkin = (Cb >= 77 && Cb <= 127) && (Cr >= 133 && Cr <= 173) && (Y > 40 && Y < 230);
-                    samples++;
-                    if (isSkin) skin++;
-                }
-            }
-            double ratio = samples > 0 ? (double)skin / samples : 0.0;
-            return ratio >= 0.004; // umbral aún más permisivo: selfies con iluminación variable
-        } catch (Exception e) {
-            return false;
-        }
+        return faceStrategy.isLikelyFacePhoto(imageBytes, contentType);
     }
 
     private ChatResponse ruleBasedReply(ChatRequest req) {
