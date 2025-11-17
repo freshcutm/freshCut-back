@@ -124,7 +124,7 @@ public class AiController {
             boolean relevant = faceOk || textOk;
             ChatResponse res = relevant
                 ? geminiService.recommendFromPhoto(image, file.getContentType(), faceDescription)
-                : new ChatResponse("Puedo ayudarte solo con recomendaciones de cortes, estilos, barba o facciones. ¿Quieres describir tu rostro o subir una foto?");
+                : new ChatResponse("No se puede procesar la foto. Por favor, sube una foto de tu rostro.");
 
             String email = null;
             if (authorization != null && authorization.startsWith("Bearer ")) {
@@ -144,6 +144,11 @@ public class AiController {
             }
             chatLogRepository.save(log);
 
+            if (!relevant) {
+                return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                        .header("X-Reject-Reason", faceOk ? "irrelevant_text" : "no_face_detected")
+                        .body(res);
+            }
             return ResponseEntity.ok(res);
         } catch (IOException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ChatResponse("Puedo ayudarte solo con recomendaciones de cortes, estilos, barba o facciones. ¿Quieres describir tu rostro o subir una foto?"));
