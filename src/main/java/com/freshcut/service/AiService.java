@@ -1,6 +1,7 @@
 package com.freshcut.service;
 
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,6 +33,7 @@ public class AiService {
     private final String groqKey;
     private final RestTemplate restTemplate;
     private static final String GROQ_MODEL = "llama-3.1-8b-instant";
+    private static final String GROQ_VISION_MODEL = "llama-3.2-11b-vision-preview";
     private static final String STANDARD_REPLY = "Puedo ayudarte solo con recomendaciones de cortes, estilos, barba o facciones. ¿Quieres describir tu rostro o subir una foto?";
     // Estrategias (Patrón Strategy) para relevancia de texto y detección de rostro
     private final TextRelevanceStrategy textStrategy = new DefaultTextRelevanceStrategy();
@@ -128,13 +130,22 @@ public class AiService {
                 + "Si el usuario pregunta algo fuera de este contexto, responde exactamente: '" + STANDARD_REPLY + "'. "
                 + "Jamás generes recomendaciones si no hay información válida. No inventes detalles de la foto. No hables de otros temas. Si no se detecta rostro, responde con el mensaje estándar.";
         messages.add(Map.of("role", "system", "content", systemPrompt));
+
+        List<Map<String, Object>> userContent = new ArrayList<>();
+        userContent.add(Map.of("type", "text", "text", "Genera recomendaciones breves en español (máx 4 líneas), con 1–2 opciones y mantenimiento."));
+        String mime = (contentType != null && !contentType.isBlank()) ? contentType : "image/jpeg";
+        String b64 = Base64.getEncoder().encodeToString(imageBytes);
+        userContent.add(Map.of(
+                "type", "image_url",
+                "image_url", Map.of("url", "data:" + mime + ";base64," + b64)
+        ));
         if (faceDescription != null && !faceDescription.isBlank()) {
-            messages.add(Map.of("role", "user", "content", "Notas del usuario: " + faceDescription));
+            userContent.add(Map.of("type", "text", "text", "Notas del usuario: " + faceDescription));
         }
-        messages.add(Map.of("role", "user", "content", "Genera recomendaciones breves en español (máx 4 líneas), con 1–2 opciones y mantenimiento."));
+        messages.add(Map.of("role", "user", "content", userContent));
 
         Map<String, Object> body = new HashMap<>();
-        body.put("model", GROQ_MODEL);
+        body.put("model", GROQ_VISION_MODEL);
         body.put("messages", messages);
         body.put("temperature", 0.4);
         body.put("max_tokens", 256);
