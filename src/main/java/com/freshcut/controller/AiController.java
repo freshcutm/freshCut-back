@@ -24,7 +24,7 @@ import com.freshcut.dto.ChatDtos.Message;
 import com.freshcut.db.model.ChatLog;
 import com.freshcut.db.repository.ChatLogRepository;
 import com.freshcut.security.JwtService;
-import com.freshcut.service.GeminiService;
+import com.freshcut.service.AiService;
 
 import io.jsonwebtoken.Claims;
 import jakarta.validation.Valid;
@@ -33,12 +33,12 @@ import jakarta.validation.Valid;
 @RequestMapping("/api/ai")
 @CrossOrigin(origins = "*")
 public class AiController {
-    private final GeminiService geminiService;
+    private final AiService aiService;
     private final ChatLogRepository chatLogRepository;
     private final JwtService jwtService;
 
-    public AiController(GeminiService geminiService, ChatLogRepository chatLogRepository, JwtService jwtService) {
-        this.geminiService = geminiService;
+    public AiController(AiService aiService, ChatLogRepository chatLogRepository, JwtService jwtService) {
+        this.aiService = aiService;
         this.chatLogRepository = chatLogRepository;
         this.jwtService = jwtService;
     }
@@ -62,12 +62,12 @@ public class AiController {
                 if (m.getContent() != null) all.append(m.getContent()).append(" ");
             }
         }
-        boolean relevant = geminiService.isRelevantText(all.toString());
+        boolean relevant = aiService.isRelevantText(all.toString());
         ChatResponse res;
         if (!relevant) {
             res = new ChatResponse("Puedo ayudarte solo con recomendaciones de cortes, estilos, barba o facciones. ¿Quieres describir tu rostro o subir una foto?");
         } else {
-            res = geminiService.chat(req);
+            res = aiService.chat(req);
         }
         ChatLog log = new ChatLog();
         log.setEmail(email);
@@ -99,16 +99,19 @@ public class AiController {
             @RequestParam(name = "strength", required = false) Integer strength) {
         try {
             byte[] original = file.getBytes();
-            byte[] out = geminiService.editHair(original, file.getContentType(), faceDescription, style, strength);
+            byte[] out = aiService.editHair(original, file.getContentType(), faceDescription, style, strength);
             boolean edited = !Arrays.equals(original, out);
-            // Gemini suele devolver PNG para ediciones; usamos image/png por defecto
             return ResponseEntity.ok()
                     .header(HttpHeaders.CONTENT_TYPE, MediaType.IMAGE_PNG_VALUE)
                     .header(HttpHeaders.CACHE_CONTROL, "no-cache, no-store, must-revalidate")
                     .header("X-AI-Edited", edited ? "true" : "false")
                     .body(out);
-        } catch (IOException | IllegalArgumentException e) {
+        } catch (IOException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .header("X-Error", "Servicio de edición no disponible en el plan actual")
+                    .build();
         }
     }
 
@@ -119,11 +122,11 @@ public class AiController {
             @RequestHeader(name = "Authorization", required = false) String authorization) {
         try {
             byte[] image = file.getBytes();
-            boolean textOk = geminiService.isRelevantText(faceDescription);
-            boolean faceOk = geminiService.isLikelyFacePhoto(image, file.getContentType());
+            boolean textOk = aiService.isRelevantText(faceDescription);
+            boolean faceOk = aiService.isLikelyFacePhoto(image, file.getContentType());
             boolean relevant = faceOk || textOk;
-            // Siempre devolver 200 OK. Si es irrelevante, GeminiService responde con STANDARD_REPLY.
-            ChatResponse res = geminiService.recommendFromPhoto(image, file.getContentType(), faceDescription);
+            // Siempre devolver 200 OK. Si es irrelevante, AiService responde con STANDARD_REPLY.
+            ChatResponse res = aiService.recommendFromPhoto(image, file.getContentType(), faceDescription);
 
             String email = null;
             if (authorization != null && authorization.startsWith("Bearer ")) {
