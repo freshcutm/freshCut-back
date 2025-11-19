@@ -14,19 +14,19 @@ public class DefaultFaceDetectionStrategy implements FaceDetectionStrategy {
             // Rechazar tipos de contenido no imagen
             if (contentType != null) {
                 String ct = contentType.toLowerCase();
-                if (!(ct.startsWith("image/") && (ct.contains("png") || ct.contains("jpeg") || ct.contains("jpg") || ct.contains("webp")))) {
+                if (!ct.startsWith("image/")) {
                     return false;
                 }
             }
-            if (imageBytes == null || imageBytes.length < 8000) return false; // muy pequeña
+            if (imageBytes == null || imageBytes.length < 4000) return false; // tamaño mínimo relajado
             BufferedImage img = ImageIO.read(new ByteArrayInputStream(imageBytes));
             if (img == null) return false;
             int w = img.getWidth();
             int h = img.getHeight();
-            if (w < 128 || h < 128) return false;
+            if (w < 96 || h < 96) return false;
             // Evitar proporciones atípicas (gráficos, banners)
             double ratioWH = (double) w / Math.max(1, h);
-            if (ratioWH < 0.5 || ratioWH > 2.0) return false;
+            if (ratioWH < 0.4 || ratioWH > 2.5) return false;
             // Muestreo de piel en zona central ampliada
             int cx0 = Math.max(0, w/2 - w/4);
             int cy0 = Math.max(0, h/2 - h/4);
@@ -50,8 +50,8 @@ public class DefaultFaceDetectionStrategy implements FaceDetectionStrategy {
                 }
             }
             double ratio = samples > 0 ? (double)skin / samples : 0.0;
-            // Umbral más estricto para evitar falsos positivos en gráficos/objetos
-            return ratio >= 0.02;
+            // Umbral más permisivo para admitir más fotos reales de rostro
+            return ratio >= 0.01;
         } catch (Exception e) {
             return false;
         }

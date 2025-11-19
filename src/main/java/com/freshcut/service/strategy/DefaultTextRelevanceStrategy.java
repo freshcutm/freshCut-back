@@ -27,6 +27,6 @@ public class DefaultTextRelevanceStrategy implements TextRelevanceStrategy {
         int score = 0;
         for (String k : domain) if (t.contains(k)) score++;
         for (String k : off) if (t.contains(k)) score -= 1;
-        return score >= 1;
+        return score >= 2;
     }
 }

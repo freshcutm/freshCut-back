@@ -68,7 +68,8 @@ public class AiService {
         List<Map<String, Object>> messages = new ArrayList<>();
         String systemPrompt = "Eres un asistente especializado exclusivamente en recomendaciones de cortes de cabello, barba y estilos basados en las facciones del rostro. "
                 + "Si el usuario pregunta algo fuera de este contexto, responde exactamente: '" + STANDARD_REPLY + "'. "
-                + "Jamás generes recomendaciones si no hay información válida. No inventes detalles de la foto. No hables de otros temas.";
+                + "Usa solo nombres de estilos del conjunto: fade (bajo/medio/alto), pompadour, quiff, crop, crew, buzz, side part, undercut, mullet, peinado hacia atrás. "
+                + "Jamás generes recomendaciones si no hay información válida. No inventes detalles de la foto. No uses nombres temáticos o no estándar (por ejemplo, autos). No hables de otros temas.";
         messages.add(Map.of("role", "system", "content", systemPrompt));
         if (req.getFaceDescription() != null && !req.getFaceDescription().isBlank()) {
             messages.add(Map.of("role", "user", "content", "Descripción del rostro del cliente: " + req.getFaceDescription()));
@@ -102,6 +103,9 @@ public class AiService {
             if (message == null) return new ChatResponse(STANDARD_REPLY);
             Object content = message.get("content");
             String reply = content == null ? "" : content.toString();
+            if (!containsAllowedStyle(reply) || containsBannedTokens(reply)) {
+                return new ChatResponse(STANDARD_REPLY);
+            }
             return new ChatResponse(reply);
         } catch (HttpClientErrorException e) {
             return new ChatResponse(STANDARD_REPLY);
@@ -126,13 +130,9 @@ public class AiService {
 
         String url = "https://api.groq.com/openai/v1/chat/completions";
         List<Map<String, Object>> messages = new ArrayList<>();
-        String systemPrompt = "Eres un asistente especializado exclusivamente en recomendaciones de cortes de cabello, barba y estilos basados en las facciones del rostro. "
-                + "Si el usuario pregunta algo fuera de este contexto, responde exactamente: '" + STANDARD_REPLY + "'. "
-                + "Jamás generes recomendaciones si no hay información válida. No inventes detalles de la foto. No hables de otros temas. Si no se detecta rostro, responde con el mensaje estándar.";
-        messages.add(Map.of("role", "system", "content", systemPrompt));
 
         List<Map<String, Object>> userContent = new ArrayList<>();
-        userContent.add(Map.of("type", "text", "text", "Genera recomendaciones breves en español (máx 4 líneas), con 1–2 opciones y mantenimiento."));
+        userContent.add(Map.of("type", "text", "text", "Reglas: genera recomendaciones breves en español (máx 4 líneas), con 1–2 opciones y mantenimiento. Usa solo nombres de estilos permitidos y no inventes nombres."));
         String mime = (contentType != null && !contentType.isBlank()) ? contentType : "image/jpeg";
         String b64 = Base64.getEncoder().encodeToString(imageBytes);
         userContent.add(Map.of(
@@ -142,6 +142,8 @@ public class AiService {
         if (faceDescription != null && !faceDescription.isBlank()) {
             userContent.add(Map.of("type", "text", "text", "Notas del usuario: " + faceDescription));
         }
+        // Importante: para modelos vision de Groq evitar 'system' + imagen (puede dar error). Incluir reglas en el bloque de usuario.
+        userContent.add(Map.of("type", "text", "text", "Usa solo estilos: fade (bajo/medio/alto), pompadour, quiff, crop, crew, buzz, side part, undercut, mullet, peinado hacia atrás. Si la foto no tiene rostro, responde con el mensaje estándar."));
         messages.add(Map.of("role", "user", "content", userContent));
 
         Map<String, Object> body = new HashMap<>();
@@ -167,12 +169,39 @@ public class AiService {
             if (message == null) return new ChatResponse(STANDARD_REPLY);
             Object content = message.get("content");
             String reply = content == null ? "" : content.toString();
+            if (!containsAllowedStyle(reply) || containsBannedTokens(reply)) {
+                return new ChatResponse(STANDARD_REPLY);
+            }
             return new ChatResponse(reply);
         } catch (HttpClientErrorException e) {
             return new ChatResponse(STANDARD_REPLY);
         } catch (RestClientException e) {
             return new ChatResponse(STANDARD_REPLY);
         }
+    }
+
+    private boolean containsAllowedStyle(String text) {
+        if (text == null) return false;
+        String t = text.toLowerCase();
+        String[] styles = {"fade", "pompadour", "quiff", "crop", "crew", "buzz", "side part", "raya", "undercut", "mullet", "peinado hacia atrás"};
+        for (String s : styles) {
+            if (t.contains(s)) return true;
+        }
+        // También aceptar recomendaciones basadas en forma de rostro
+        String[] facial = {"oval", "redond", "triangular", "diamante", "cuadrad", "alargad", "estrech", "mandíbula", "frente", "pómulos"};
+        int hits = 0;
+        for (String f : facial) if (t.contains(f)) hits++;
+        return hits >= 2;
+    }
+
+    private boolean containsBannedTokens(String text) {
+        if (text == null) return false;
+        String t = text.toLowerCase();
+        String[] banned = {"mustang", "camaro", "tesla", "bmw", "ford", "chevrolet", "ferrari", "lamborghini", "politica", "política", "clima", "receta", "comida", "videojuego"};
+        for (String b : banned) {
+            if (t.contains(b)) return true;
+        }
+        return false;
     }
 
     public boolean isRelevantText(String text) {
