@@ -210,7 +210,7 @@ public class AiService {
     private String normalizeToThreeRecommendations(String text) {
         if (text == null) return STANDARD_REPLY;
         String t = text.replace("**", "").replace("Opciones:", "").replace("Estilos:", "").replace("Cortes:", "").trim();
-        String[] raw = t.split("\r?\n|") ;
+        String[] raw = t.split("\r?\n");
         List<String> items = new ArrayList<>();
         for (String s : raw) {
             String x = s.trim();
