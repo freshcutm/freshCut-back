@@ -69,6 +69,7 @@ public class AiService {
         String systemPrompt = "Eres un asistente especializado exclusivamente en recomendaciones de cortes de cabello, barba y estilos basados en las facciones del rostro. "
                 + "Si el usuario pregunta algo fuera de este contexto, responde exactamente: '" + STANDARD_REPLY + "'. "
                 + "Usa solo nombres de estilos del conjunto: fade (bajo/medio/alto), pompadour, quiff, crop, crew, buzz, side part, undercut, mullet, peinado hacia atrás. "
+                + "Responde exactamente con 3 líneas numeradas: 1. ..., 2. ..., 3. ..., sin títulos ni secciones. "
                 + "Jamás generes recomendaciones si no hay información válida. No inventes detalles de la foto. No uses nombres temáticos o no estándar (por ejemplo, autos). No hables de otros temas.";
         messages.add(Map.of("role", "system", "content", systemPrompt));
         if (req.getFaceDescription() != null && !req.getFaceDescription().isBlank()) {
@@ -103,6 +104,7 @@ public class AiService {
             if (message == null) return new ChatResponse(STANDARD_REPLY);
             Object content = message.get("content");
             String reply = content == null ? "" : content.toString();
+            reply = normalizeToThreeRecommendations(reply);
             if (!containsAllowedStyle(reply) || containsBannedTokens(reply)) {
                 return new ChatResponse(STANDARD_REPLY);
             }
@@ -132,7 +134,7 @@ public class AiService {
         List<Map<String, Object>> messages = new ArrayList<>();
 
         List<Map<String, Object>> userContent = new ArrayList<>();
-        userContent.add(Map.of("type", "text", "text", "Reglas: genera recomendaciones breves en español (máx 4 líneas), con 1–2 opciones y mantenimiento. Usa solo nombres de estilos permitidos y no inventes nombres."));
+        userContent.add(Map.of("type", "text", "text", "Reglas: responde exactamente con 3 líneas numeradas: 1. ..., 2. ..., 3. ...; en español; usa solo nombres de estilos permitidos; sin títulos ni secciones; no inventes nombres."));
         String mime = (contentType != null && !contentType.isBlank()) ? contentType : "image/jpeg";
         String b64 = Base64.getEncoder().encodeToString(imageBytes);
         userContent.add(Map.of(
@@ -169,6 +171,7 @@ public class AiService {
             if (message == null) return new ChatResponse(STANDARD_REPLY);
             Object content = message.get("content");
             String reply = content == null ? "" : content.toString();
+            reply = normalizeToThreeRecommendations(reply);
             if (!containsAllowedStyle(reply) || containsBannedTokens(reply)) {
                 return new ChatResponse(STANDARD_REPLY);
             }
@@ -202,6 +205,28 @@ public class AiService {
             if (t.contains(b)) return true;
         }
         return false;
+    }
+
+    private String normalizeToThreeRecommendations(String text) {
+        if (text == null) return STANDARD_REPLY;
+        String t = text.replace("**", "").replace("Opciones:", "").replace("Estilos:", "").replace("Cortes:", "").trim();
+        String[] raw = t.split("\r?\n|") ;
+        List<String> items = new ArrayList<>();
+        for (String s : raw) {
+            String x = s.trim();
+            if (x.isEmpty()) continue;
+            if (x.matches("^\\d+\\)\\s.*")) x = x.replaceFirst("^\\d+\\)\\s", "");
+            if (x.matches("^\\d+\\.\\s.*")) x = x.replaceFirst("^\\d+\\.\\s", "");
+            if (x.length() > 160) x = x.substring(0, 160).trim();
+            items.add(x);
+            if (items.size() == 6) break;
+        }
+        if (items.isEmpty()) return STANDARD_REPLY;
+        List<String> out = new ArrayList<>();
+        for (int i = 0; i < Math.min(3, items.size()); i++) {
+            out.add((i+1) + ". " + items.get(i));
+        }
+        return String.join("\n", out);
     }
 
     public boolean isRelevantText(String text) {
