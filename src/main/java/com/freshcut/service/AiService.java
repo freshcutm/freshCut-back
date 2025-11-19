@@ -123,9 +123,6 @@ public class AiService {
     public ChatResponse recommendFromPhoto(byte[] imageBytes, String contentType, String faceDescription) {
         boolean faceOk = isLikelyFacePhoto(imageBytes, contentType);
         boolean textOk = isRelevantText(faceDescription);
-        if (!(textOk || faceOk)) {
-            return new ChatResponse(STANDARD_REPLY);
-        }
         if (groqKey == null || groqKey.isBlank()) {
             return new ChatResponse(STANDARD_REPLY);
         }

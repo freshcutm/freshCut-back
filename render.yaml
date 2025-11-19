@@ -8,4 +8,4 @@ services:
       - key: PORT
         value: 8080
       - key: MONGODB_URI
-        value: "***REMOVED***"
+        value: "mongodb+srv://freshcut0410_db_user:Pasto1307@cluster0.x2tpt1t.mongodb.net/freshcut?retryWrites=true&w=majority&appName=Cluster0"
