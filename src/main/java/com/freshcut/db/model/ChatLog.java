@@ -15,6 +15,7 @@ public class ChatLog {
     private String faceDescription; // opcional
     private String reply;
     private String rejectReason; // opcional: motivo de rechazo por irrelevancia/no rostro
+    private boolean saved = false; // marcado por el usuario cuando guarda el chat
     private Instant createdAt = Instant.now();
 
     public static class Msg {
@@ -39,6 +40,8 @@ public class ChatLog {
     public void setReply(String reply) { this.reply = reply; }
     public String getRejectReason() { return rejectReason; }
     public void setRejectReason(String rejectReason) { this.rejectReason = rejectReason; }
+    public boolean isSaved() { return saved; }
+    public void setSaved(boolean saved) { this.saved = saved; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
 }

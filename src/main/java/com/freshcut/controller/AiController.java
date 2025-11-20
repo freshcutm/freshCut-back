@@ -11,6 +11,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -99,7 +100,8 @@ public class AiController {
             @RequestParam(name = "strength", required = false) Integer strength) {
         try {
             byte[] original = file.getBytes();
-            byte[] out = aiService.editHair(original, file.getContentType(), faceDescription, style, strength);
+            String contentType = file.getContentType() != null ? file.getContentType() : MediaType.IMAGE_PNG_VALUE;
+            byte[] out = aiService.editHair(original, contentType, faceDescription, style, strength);
             boolean edited = !Arrays.equals(original, out);
             return ResponseEntity.ok()
                     .header(HttpHeaders.CONTENT_TYPE, MediaType.IMAGE_PNG_VALUE)
@@ -115,14 +117,14 @@ public class AiController {
         }
     }
 
-@PostMapping(value = "/recommend-from-photo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping(value = "/recommend-from-photo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ChatResponse> recommendFromPhoto(
             @RequestParam("file") MultipartFile file,
             @RequestParam(name = "faceDescription", required = false) String faceDescription,
             @RequestHeader(name = "Authorization", required = false) String authorization) {
         try {
             byte[] image = file.getBytes();
-            boolean textOk = aiService.isRelevantText(faceDescription);
+            boolean textOk = aiService.isRelevantText(faceDescription == null ? "" : faceDescription);
             boolean faceOk = aiService.isLikelyFacePhoto(image, file.getContentType());
             boolean relevant = faceOk || textOk;
             // Siempre devolver 200 OK. Si es irrelevante, AiService responde con STANDARD_REPLY.
@@ -154,5 +156,48 @@ public class AiController {
         } catch (IOException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ChatResponse("Puedo ayudarte solo con recomendaciones de cortes, estilos, barba o facciones. ¿Quieres describir tu rostro o subir una foto?"));
         }
+    }
+
+    // Nuevo: listar historial de chats guardados del usuario autenticado
+    @GetMapping("/history")
+    public ResponseEntity<List<ChatLog>> history(
+            @RequestHeader(name = "Authorization", required = false) String authorization) {
+        String email = null;
+        if (authorization != null && authorization.startsWith("Bearer ")) {
+            try {
+                Claims claims = jwtService.parse(authorization.substring(7));
+                email = claims.getSubject();
+            } catch (Exception ignored) {}
+        }
+        if (email == null || email.isBlank()) {
+            // Mantener tipo de respuesta consistente con la firma: sin cuerpo en 401
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        List<ChatLog> list = chatLogRepository.findByEmailAndSavedOrderByCreatedAtDesc(email, true);
+        return ResponseEntity.ok(list);
+    }
+
+    // Nuevo: marcar como guardado el último chat del usuario autenticado
+    @PostMapping("/save-latest")
+    public ResponseEntity<?> saveLatest(
+            @RequestHeader(name = "Authorization", required = false) String authorization) {
+        String email = null;
+        if (authorization != null && authorization.startsWith("Bearer ")) {
+            try {
+                Claims claims = jwtService.parse(authorization.substring(7));
+                email = claims.getSubject();
+            } catch (Exception ignored) {}
+        }
+        if (email == null || email.isBlank()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Usuario no autenticado");
+        }
+        var latestOpt = chatLogRepository.findTopByEmailOrderByCreatedAtDesc(email);
+        if (latestOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("No hay chats para guardar");
+        }
+        var log = latestOpt.get();
+        log.setSaved(true);
+        chatLogRepository.save(log);
+        return ResponseEntity.ok(java.util.Map.of("id", log.getId()));
     }
 }
