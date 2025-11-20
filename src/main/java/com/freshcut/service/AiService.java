@@ -85,7 +85,7 @@ public class AiService {
         body.put("model", GROQ_MODEL);
         body.put("messages", messages);
         body.put("temperature", 0.4);
-        body.put("max_tokens", 256);
+        body.put("max_tokens", 1024);
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -149,7 +149,7 @@ public class AiService {
         body.put("model", GROQ_VISION_MODEL);
         body.put("messages", messages);
         body.put("temperature", 0.4);
-        body.put("max_tokens", 256);
+        body.put("max_tokens", 1024);
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -214,7 +214,7 @@ public class AiService {
             if (x.isEmpty()) continue;
             if (x.matches("^\\d+\\)\\s.*")) x = x.replaceFirst("^\\d+\\)\\s", "");
             if (x.matches("^\\d+\\.\\s.*")) x = x.replaceFirst("^\\d+\\.\\s", "");
-            if (x.length() > 160) x = x.substring(0, 160).trim();
+            // No truncar el contenido de cada recomendación para mostrar el texto completo
             items.add(x);
             if (items.size() == 6) break;
         }
