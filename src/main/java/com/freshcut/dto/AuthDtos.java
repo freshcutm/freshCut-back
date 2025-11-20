@@ -28,7 +28,7 @@ public class AuthDtos {
     public static class LoginRequest {
         @NotBlank @Email
         private String email;
-        @NotBlank
+        // Contraseña en texto plano ya no es obligatoria; el frontend envía solo el hash
         private String password;
         // Opcional: para enviar el hash SHA-256 en lugar de la contraseña en texto plano
         private String passwordSha256;
