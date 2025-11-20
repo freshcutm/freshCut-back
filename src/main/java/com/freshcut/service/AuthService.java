@@ -49,7 +49,7 @@ public class AuthService {
                 ("BARBER".equalsIgnoreCase(req.getRole()) ? Role.BARBER : Role.USER);
         User u = new User();
         u.setEmail(req.getEmail());
-        u.setPasswordHash(passwordEncoder.encode(req.getPassword()));
+        u.setPasswordHash(passwordEncoder.encode(sha256(req.getPassword())));
         u.setRole(role);
         u.setName(req.getName());
         if (role == Role.BARBER) {
@@ -156,7 +156,7 @@ public class AuthService {
         if (!isStrongPassword(req.getNewPassword())) {
             throw new IllegalArgumentException("Contraseña inválida: mínimo 8 caracteres, incluir mayúscula, minúscula, número y carácter especial");
         }
-        u.setPasswordHash(passwordEncoder.encode(req.getNewPassword()));
+        u.setPasswordHash(passwordEncoder.encode(sha256(req.getNewPassword())));
         u.setResetCode(null);
         u.setResetExpiry(null);
         userRepository.save(u);
@@ -174,7 +174,7 @@ public class AuthService {
         if (!isStrongPassword(newPw)) {
             throw new IllegalArgumentException("Contraseña inválida: mínimo 8 caracteres, incluir mayúscula, minúscula, número y carácter especial");
         }
-        u.setPasswordHash(passwordEncoder.encode(newPw));
+        u.setPasswordHash(passwordEncoder.encode(sha256(newPw)));
         // Limpiar cualquier código previo de reset
         u.setResetCode(null);
         u.setResetExpiry(null);
