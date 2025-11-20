@@ -19,6 +19,8 @@ import com.freshcut.db.model.User;
 import com.freshcut.db.repository.UserRepository;
 
 import jakarta.annotation.PostConstruct;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Size;
 
 @RestController
 @RequestMapping("/api/profile")
@@ -55,11 +57,20 @@ public class ProfileController {
             this.email = u.getEmail();
             this.role = u.getRole().name();
             this.name = u.getName();
-            this.avatarUrl = "/api/profile/avatar/" + u.getId();
+            // Solo exponer avatarUrl si hay ruta y el archivo existe, para evitar 404 en el frontend
+            String url = null;
+            if (u.getAvatarPath() != null && !u.getAvatarPath().isBlank()) {
+                Path p = Paths.get(u.getAvatarPath());
+                if (Files.exists(p)) {
+                    url = "/api/profile/avatar/" + u.getId();
+                }
+            }
+            this.avatarUrl = url;
         }
     }
 
     public static class UpdateProfileDto {
+        @Size(min = 1, max = 50)
         public String name;
     }
 
@@ -70,7 +81,7 @@ public class ProfileController {
     }
 
     @PutMapping("/me")
-    public ResponseEntity<UserProfileDto> updateMe(@RequestBody UpdateProfileDto payload) {
+    public ResponseEntity<UserProfileDto> updateMe(@Valid @RequestBody UpdateProfileDto payload) {
         User u = currentUser();
         if (payload.name != null && !payload.name.isBlank()) {
             u.setName(payload.name);
