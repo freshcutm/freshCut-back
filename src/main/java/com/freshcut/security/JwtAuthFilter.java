@@ -28,8 +28,17 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
         String header = request.getHeader(HttpHeaders.AUTHORIZATION);
+        String token = null;
         if (header != null && header.startsWith("Bearer ")) {
-            String token = header.substring(7);
+            token = header.substring(7);
+        } else if (request.getCookies() != null) {
+            // Fallback: leer JWT desde cookie HttpOnly
+            var cookies = request.getCookies();
+            for (var c : cookies) {
+                if ("AUTH_TOKEN".equals(c.getName())) { token = c.getValue(); break; }
+            }
+        }
+        if (token != null && !token.isBlank()) {
             try {
                 Claims claims = jwtService.parse(token);
                 String email = claims.getSubject();

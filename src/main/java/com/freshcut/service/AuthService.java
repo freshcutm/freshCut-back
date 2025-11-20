@@ -75,9 +75,10 @@ public class AuthService {
     public AuthResponse login(LoginRequest req) {
         String email = (req != null && req.getEmail() != null) ? req.getEmail().trim() : "";
         String password = (req != null && req.getPassword() != null) ? req.getPassword() : "";
+        String passwordSha = (req != null && req.getPasswordSha256() != null) ? req.getPasswordSha256() : "";
 
         // Si faltan datos básicos, responder 200 con token vacío para evitar errores en consola
-        if (email.isBlank() || password.isBlank()) {
+        if (email.isBlank() || (password.isBlank() && passwordSha.isBlank())) {
             return new AuthResponse("", email, "");
         }
 
@@ -88,12 +89,21 @@ public class AuthService {
         }
         User u = opt.get();
 
-        boolean ok = passwordEncoder.matches(password, u.getPasswordHash());
-        if (!ok) {
-            // Compatibilidad con cuentas creadas cuando el frontend enviaba SHA-256
-            String legacy = sha256(password);
-            ok = passwordEncoder.matches(legacy, u.getPasswordHash());
+        boolean ok = false;
+        if (!password.isBlank()) {
+            ok = passwordEncoder.matches(password, u.getPasswordHash());
+            if (!ok) {
+                // Compatibilidad con cuentas creadas cuando el frontend enviaba SHA-256 del password
+                String legacy = sha256(password);
+                ok = passwordEncoder.matches(legacy, u.getPasswordHash());
+            }
         }
+
+        // Si no se validó con el texto plano (o no se envió), intentar con el hash enviado
+        if (!ok && !passwordSha.isBlank()) {
+            ok = passwordEncoder.matches(passwordSha, u.getPasswordHash());
+        }
+
         if (!ok) {
             // Responder 200 OK con token vacío para evitar errores de consola
             return new AuthResponse("", email, "");

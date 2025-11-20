@@ -1,6 +1,10 @@
 package com.freshcut.controller;
 
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import com.freshcut.dto.AuthDtos.AuthResponse;
@@ -29,12 +33,25 @@ public class AuthController {
 
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest req) {
-        return ResponseEntity.ok(authService.register(req));
+        AuthResponse res = authService.register(req);
+        // Emitir cookie HttpOnly con el token para navegación segura
+        if (res.getToken() != null && !res.getToken().isBlank()) {
+            ResponseCookie cookie = ResponseCookie.from("AUTH_TOKEN", res.getToken())
+                    .httpOnly(true).secure(true).sameSite("None").path("/").build();
+            return ResponseEntity.ok().header(HttpHeaders.SET_COOKIE, cookie.toString()).body(res);
+        }
+        return ResponseEntity.ok(res);
     }
 
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(@RequestBody LoginRequest req) {
-        return ResponseEntity.ok(authService.login(req));
+        AuthResponse res = authService.login(req);
+        if (res.getToken() != null && !res.getToken().isBlank()) {
+            ResponseCookie cookie = ResponseCookie.from("AUTH_TOKEN", res.getToken())
+                    .httpOnly(true).secure(true).sameSite("None").path("/").build();
+            return ResponseEntity.ok().header(HttpHeaders.SET_COOKIE, cookie.toString()).body(res);
+        }
+        return ResponseEntity.ok(res);
     }
 
     @PostMapping("/forgot")
@@ -56,13 +73,21 @@ public class AuthController {
     }
 
     @GetMapping("/me")
-    public ResponseEntity<AuthResponse> me(@RequestHeader(name = "Authorization", required = false) String authorization) {
-        if (authorization == null || !authorization.startsWith("Bearer ")) {
+    public ResponseEntity<AuthResponse> me() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || auth.getName() == null) {
             return ResponseEntity.status(401).build();
         }
-        Claims claims = jwtService.parse(authorization.substring(7));
-        String email = claims.getSubject();
-        String role = (String) claims.get("role");
+        String email = auth.getName();
+        String role = auth.getAuthorities().stream().findFirst().map(a -> a.getAuthority().replace("ROLE_", "")).orElse("");
         return ResponseEntity.ok(new AuthResponse("", email, role));
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout() {
+        // Expirar cookie HttpOnly
+        ResponseCookie cookie = ResponseCookie.from("AUTH_TOKEN", "")
+                .httpOnly(true).secure(true).sameSite("None").path("/").maxAge(0).build();
+        return ResponseEntity.noContent().header(HttpHeaders.SET_COOKIE, cookie.toString()).build();
     }
 }

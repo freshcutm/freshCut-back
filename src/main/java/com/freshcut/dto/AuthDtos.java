@@ -30,11 +30,15 @@ public class AuthDtos {
         private String email;
         @NotBlank
         private String password;
+        // Opcional: para enviar el hash SHA-256 en lugar de la contraseña en texto plano
+        private String passwordSha256;
 
         public String getEmail() { return email; }
         public void setEmail(String email) { this.email = email; }
         public String getPassword() { return password; }
         public void setPassword(String password) { this.password = password; }
+        public String getPasswordSha256() { return passwordSha256; }
+        public void setPasswordSha256(String passwordSha256) { this.passwordSha256 = passwordSha256; }
     }
 
     public static class AuthResponse {
