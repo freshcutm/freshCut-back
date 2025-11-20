@@ -15,6 +15,7 @@ import com.freshcut.dto.AuthDtos.AuthResponse;
 import com.freshcut.dto.AuthDtos.LoginRequest;
 import com.freshcut.dto.AuthDtos.RegisterRequest;
 import com.freshcut.dto.AuthDtos.ResetRequest;
+import com.freshcut.dto.AuthDtos.ResetSimpleRequest;
 import com.freshcut.db.model.Barber;
 import com.freshcut.db.model.Role;
 import com.freshcut.db.model.User;
@@ -146,6 +147,25 @@ public class AuthService {
             throw new IllegalArgumentException("Contraseña inválida: mínimo 8 caracteres, incluir mayúscula, minúscula, número y carácter especial");
         }
         u.setPasswordHash(passwordEncoder.encode(req.getNewPassword()));
+        u.setResetCode(null);
+        u.setResetExpiry(null);
+        userRepository.save(u);
+    }
+
+    // Reset simple: solo email existente y nueva contraseña válida (sin código)
+    public void resetPasswordSimple(ResetSimpleRequest req) {
+        String email = (req != null && req.getEmail() != null) ? req.getEmail().trim().toLowerCase() : "";
+        String newPw = (req != null && req.getNewPassword() != null) ? req.getNewPassword() : "";
+        if (email.isBlank() || newPw.isBlank()) {
+            throw new IllegalArgumentException("Email y nueva contraseña son requeridos");
+        }
+        User u = userRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("Credenciales inválidas"));
+        if (!isStrongPassword(newPw)) {
+            throw new IllegalArgumentException("Contraseña inválida: mínimo 8 caracteres, incluir mayúscula, minúscula, número y carácter especial");
+        }
+        u.setPasswordHash(passwordEncoder.encode(newPw));
+        // Limpiar cualquier código previo de reset
         u.setResetCode(null);
         u.setResetExpiry(null);
         userRepository.save(u);

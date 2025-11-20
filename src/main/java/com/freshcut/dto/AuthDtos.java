@@ -77,4 +77,17 @@ public class AuthDtos {
         public String getNewPassword() { return newPassword; }
         public void setNewPassword(String newPassword) { this.newPassword = newPassword; }
     }
+
+    // Reset simple sin código: solo valida email y nueva contraseña
+    public static class ResetSimpleRequest {
+        @NotBlank @Email
+        private String email;
+        @NotBlank
+        private String newPassword;
+
+        public String getEmail() { return email; }
+        public void setEmail(String email) { this.email = email; }
+        public String getNewPassword() { return newPassword; }
+        public void setNewPassword(String newPassword) { this.newPassword = newPassword; }
+    }
 }

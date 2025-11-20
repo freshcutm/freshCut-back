@@ -8,6 +8,7 @@ import com.freshcut.dto.AuthDtos.LoginRequest;
 import com.freshcut.dto.AuthDtos.RegisterRequest;
 import com.freshcut.dto.AuthDtos.ForgotRequest;
 import com.freshcut.dto.AuthDtos.ResetRequest;
+import com.freshcut.dto.AuthDtos.ResetSimpleRequest;
 import com.freshcut.security.JwtService;
 import com.freshcut.service.AuthService;
 
@@ -45,6 +46,12 @@ public class AuthController {
     @PostMapping("/reset")
     public ResponseEntity<Void> reset(@Valid @RequestBody ResetRequest req) {
         authService.resetPassword(req);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/reset-simple")
+    public ResponseEntity<Void> resetSimple(@Valid @RequestBody ResetSimpleRequest req) {
+        authService.resetPasswordSimple(req);
         return ResponseEntity.noContent().build();
     }
 
