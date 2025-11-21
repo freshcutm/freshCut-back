@@ -181,6 +181,12 @@ public class AuthService {
         userRepository.save(u);
     }
 
+    public boolean existsEmail(String email) {
+        String e = (email == null) ? "" : email.trim().toLowerCase();
+        if (e.isBlank()) return false;
+        return userRepository.existsByEmail(e);
+    }
+
     private boolean isStrongPassword(String pw) {
         if (pw == null) return false;
         return pw.matches("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).{8,}$");

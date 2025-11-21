@@ -72,6 +72,12 @@ public class AuthController {
         return ResponseEntity.noContent().build();
     }
 
+    @GetMapping("/exists")
+    public ResponseEntity<java.util.Map<String, Boolean>> exists(@RequestParam("email") String email) {
+        boolean exists = authService.existsEmail(email);
+        return ResponseEntity.ok(java.util.Map.of("exists", exists));
+    }
+
     @GetMapping("/me")
     public ResponseEntity<AuthResponse> me() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
