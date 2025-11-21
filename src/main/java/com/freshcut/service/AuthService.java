@@ -42,14 +42,23 @@ public class AuthService {
         if (userRepository.existsByEmail(req.getEmail())) {
             throw new IllegalArgumentException("El email ya está registrado");
         }
-        if (!isStrongPassword(req.getPassword())) {
-            throw new IllegalArgumentException("Contraseña inválida: mínimo 8 caracteres, incluir mayúscula, minúscula, número y carácter especial");
+        String rawOrHash = req.getPassword();
+        String sha;
+        if (isSha256Hex(rawOrHash)) {
+            // El frontend envía el SHA-256 ya calculado en el campo `password`
+            sha = rawOrHash;
+        } else {
+            // Validación de fuerza sobre el texto plano y luego hash
+            if (!isStrongPassword(rawOrHash)) {
+                throw new IllegalArgumentException("Contraseña inválida: mínimo 8 caracteres, incluir mayúscula, minúscula, número y carácter especial");
+            }
+            sha = sha256(rawOrHash);
         }
         Role role = "ADMIN".equalsIgnoreCase(req.getRole()) ? Role.ADMIN :
                 ("BARBER".equalsIgnoreCase(req.getRole()) ? Role.BARBER : Role.USER);
         User u = new User();
         u.setEmail(req.getEmail());
-        u.setPasswordHash(passwordEncoder.encode(sha256(req.getPassword())));
+        u.setPasswordHash(passwordEncoder.encode(sha));
         u.setRole(role);
         u.setName(req.getName());
         if (role == Role.BARBER) {
@@ -91,15 +100,21 @@ public class AuthService {
 
         boolean ok = false;
         if (!password.isBlank()) {
-            ok = passwordEncoder.matches(password, u.getPasswordHash());
-            if (!ok) {
-                // Compatibilidad con cuentas creadas cuando el frontend enviaba SHA-256 del password
-                String legacy = sha256(password);
-                ok = passwordEncoder.matches(legacy, u.getPasswordHash());
+            if (isSha256Hex(password)) {
+                // El campo `password` ya contiene el SHA-256
+                ok = passwordEncoder.matches(password, u.getPasswordHash());
+            } else {
+                // Primero compatibilidad con contraseñas antiguas almacenadas como bcrypt(texto)
+                ok = passwordEncoder.matches(password, u.getPasswordHash());
+                if (!ok) {
+                    // Luego comparar bcrypt(sha256(texto))
+                    String legacy = sha256(password);
+                    ok = passwordEncoder.matches(legacy, u.getPasswordHash());
+                }
             }
         }
 
-        // Si no se validó con el texto plano (o no se envió), intentar con el hash enviado
+        // Compatibilidad adicional: si se envía `passwordSha256`, aceptar también
         if (!ok && !passwordSha.isBlank()) {
             ok = passwordEncoder.matches(passwordSha, u.getPasswordHash());
         }
@@ -125,6 +140,13 @@ public class AuthService {
         } catch (Exception e) {
             return text; // fallback (no debería ocurrir)
         }
+    }
+
+    private boolean isSha256Hex(String s) {
+        if (s == null) return false;
+        String t = s.trim();
+        // 64 caracteres hexadecimales (minúsculas o mayúsculas)
+        return t.length() == 64 && t.matches("[a-fA-F0-9]{64}");
     }
 
     // Solicitar recuperación: genera código de 6 dígitos y lo guarda con expiración
